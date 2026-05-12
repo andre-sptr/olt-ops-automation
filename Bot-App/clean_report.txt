@@ -1,0 +1,40 @@
+============================================================
+  LAPORAN PEMBERSIHAN chat_history.txt
+============================================================
+
+Total tiket UNIK (setelah deduplikasi) : 9
+Total blok broadcast (sebelum bersih)  : 155
+Blok duplikat dihapus                  : 146
+
+--- Status Tiket ---
+  OPEN   : 4
+  CLOSED : 5
+
+--- TTR Compliance ---
+  COMPLY     : 8
+  NOT COMPLY : 1
+
+--- Breakdown Kategori ---
+  LOW       : 4
+  MINOR     : 3
+  OLO       : 2
+
+--- Breakdown Lokasi ---
+  ARK       : 1
+  DUM       : 2
+  PPN       : 1
+  SAK       : 1
+  UBT       : 3
+
+--- Top Penyebab ---
+  FO CUT                        : 4
+  FEEDER                        : 3
+  VANDALISME                    : 2
+  TERTABRAK MOBIL               : 1
+  DEGRADASI TEMPORER            : 1
+  DROPCORE                      : 1
+  ONT                           : 1
+  DOWN                          : 1
+  ONT RUSAK                     : 1
+
+============================================================

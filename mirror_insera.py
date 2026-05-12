@@ -1,9 +1,14 @@
-from telethon import TelegramClient, events
+import asyncio
+import os
+import requests
+import base64
 from datetime import datetime
+from telethon import TelegramClient, events
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-import os
+from playwright.async_api import async_playwright
+from PIL import Image
 
 # ==========================================
 # 1. KONFIGURASI TELEGRAM
@@ -31,10 +36,27 @@ SPREADSHEET_ID = "1Jl-povDud6JKpb4qqB8pRIA0FbpB6lbNomhs9iL5F98"
 GID_SHEET_TARGET = 0
 
 # ==========================================
-# 3. MANAJEMEN FOLDER & LOG
+# 3. KONFIGURASI WAHA & SCREENSHOT
+# ==========================================
+WAHA_URL = "https://waha-dutxvo095iqn.cgk-lab.sumopod.my.id"
+WAHA_SESSION = "OLTReport"
+WAHA_API_KEY = "ROpWNPkTUavqEbnz5zKU4mTiL0HIZoye"
+GROUP_ID_TUJUAN = [
+    "120363408272932837@g.us", # Real
+    # "120363423984319917@g.us", # Test
+]
+
+URL_PUBLISHED = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQMeEHrKcSrqZcoiFvTbXOFv-TxTj0BojoPRm5go1PZBlLHzyjVGiVyDmYfMEIUJ3hDQb1mQGfpHfsC/pubhtml" 
+GID_SHEET_SS = "633289218"
+RENTANG_CELL = "B6:AG38"
+
+# ==========================================
+# 4. MANAJEMEN FOLDER & LOG
 # ==========================================
 FOLDER_LOG = "logs"
+FOLDER_GAMBAR = "images"
 os.makedirs(FOLDER_LOG, exist_ok=True)
+os.makedirs(FOLDER_GAMBAR, exist_ok=True)
 
 def tanggal_hari_ini():
     return datetime.now().strftime("%Y-%m-%d")
@@ -42,8 +64,10 @@ def tanggal_hari_ini():
 def nama_file_log():
     return os.path.join(FOLDER_LOG, "mirror_insera_log.txt")
 
+def nama_file_ss():
+    return os.path.join(FOLDER_GAMBAR, f"Report_Insera_{tanggal_hari_ini()}.png")
+
 def catat_log(pesan):
-    """Mencatat log dengan fitur auto-reset jika masuk hari baru."""
     waktu = datetime.now().strftime("%H:%M:%S")
     tanggal_sekarang = tanggal_hari_ini()
     pesan_log = f"[{waktu}] {pesan}"
@@ -55,7 +79,6 @@ def catat_log(pesan):
     if os.path.exists(file_log):
         timestamp_modifikasi = os.path.getmtime(file_log)
         tanggal_modifikasi = datetime.fromtimestamp(timestamp_modifikasi).strftime("%Y-%m-%d")
-        
         if tanggal_modifikasi != tanggal_sekarang:
             mode = "w"
 
@@ -65,17 +88,140 @@ def catat_log(pesan):
         f.write(pesan_log + "\n")
 
 def hapus_file(path_file):
-    """Menghapus file dari server untuk menghemat storage VPS."""
     try:
         if os.path.exists(path_file):
             os.remove(path_file)
-            catat_log(f"🗑️ File lokal '{path_file}' berhasil dihapus dari storage VPS.")
+            catat_log(f"🗑️ File lokal '{path_file}' berhasil dihapus.")
     except Exception as e:
         catat_log(f"⚠️ Gagal menghapus file lokal: {e}")
 
+# ==========================================
+# 5. FUNGSI SCREENSHOT & WAHA
+# ==========================================
+def optimalkan_resolusi(path_gambar):
+    try:
+        img = Image.open(path_gambar)
+        batas_maks = 2500
+        if img.width > batas_maks or img.height > batas_maks:
+            rasio = min(batas_maks / img.width, batas_maks / img.height)
+            ukuran_baru = (int(img.width * rasio), int(img.height * rasio))
+            img = img.resize(ukuran_baru, Image.Resampling.LANCZOS)
+            img.save(path_gambar)
+    except Exception as e:
+        catat_log(f"⚠️ Gagal mengoptimalkan resolusi: {e}")
+
+async def ambil_screenshot():
+    path_ss = nama_file_ss()
+    if os.path.exists(path_ss):
+        os.remove(path_ss)
+        
+    catat_log(f"📸 Mulai mengambil screenshot area {RENTANG_CELL}...")
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(viewport={"width": 3000, "height": 1500})
+        page = await context.new_page()
+
+        target_url = f"{URL_PUBLISHED}?gid={GID_SHEET_SS}&single=true&range={RENTANG_CELL}&widget=false&headers=false&chrome=false"
+
+        try:
+            await page.goto(target_url, wait_until="domcontentloaded", timeout=90000)
+            await page.wait_for_selector("table.waffle:visible", timeout=60000)
+            await page.wait_for_timeout(3000) 
+
+            await page.evaluate("""() => {
+                const images = document.querySelectorAll('img');
+                images.forEach(img => {
+                    img.style.border = 'none';
+                    img.style.outline = 'none';
+                    
+                    let parent = img.parentElement;
+                    while (parent && parent.tagName !== 'TABLE') {
+                        parent.style.border = 'none';
+                        if (parent.tagName === 'TD' || parent.tagName === 'TH') {
+                            parent.style.borderTop = 'none';
+                            parent.style.borderRight = 'none';
+                            parent.style.borderBottom = 'none';
+                            parent.style.borderLeft = 'none';
+                            break;
+                        }
+                        parent = parent.parentElement;
+                    }
+                });
+            }""")
+
+            tabel_sheet = page.locator("table.waffle:visible").first
+            await tabel_sheet.screenshot(path=path_ss)
+            catat_log("✅ Screenshot berhasil diambil!")
+
+        except Exception as e:
+            catat_log(f"❌ Gagal mengambil screenshot: {e}")
+        finally:
+            await browser.close()
+
+    return path_ss
+
+def buat_session_baru():
+    s = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(max_retries=0, pool_connections=1, pool_maxsize=1)
+    s.mount("https://", adapter)
+    s.mount("http://", adapter)
+    return s
+
+def kirim_via_whatsapp(path_gambar):
+    if not os.path.exists(path_gambar):
+        catat_log("❌ File gambar tidak ditemukan, pengiriman WA dibatalkan.")
+        return False
+
+    session = buat_session_baru()
+    try:
+        with open(path_gambar, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+
+        url = f"{WAHA_URL.rstrip('/')}/api/sendImage"
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "X-Api-Key": WAHA_API_KEY,
+            "Connection": "close"
+        }
+
+        waktu_caption = datetime.now().strftime("%Y-%m-%d %H:%M")
+        caption_baru = (
+            f"📊 *Monitor Tiket Open TTR 3 JAM*\n"
+            f"📝 Created by FBB.SBT\n"
+            f"Tanggal: {waktu_caption}"
+        )
+
+        for group_id in GROUP_ID_TUJUAN:
+            catat_log(f"🚀 Mengirim gambar ke WhatsApp: {group_id}...")
+            payload = {
+                "session": WAHA_SESSION,
+                "chatId": group_id,
+                "file": {
+                    "mimetype": "image/png",
+                    "filename": f"Report_Insera_{tanggal_hari_ini()}.png",
+                    "data": encoded_string
+                },
+                "caption": caption_baru
+            }
+
+            try:
+                response = session.post(url, headers=headers, json=payload, timeout=60)
+                if response.status_code in [200, 201]:
+                    catat_log(f"✅ Berhasil dikirim ke WhatsApp ({group_id})!")
+                else:
+                    catat_log(f"❌ Gagal mengirim ke {group_id}. Status: {response.status_code}")
+            except Exception as e:
+                catat_log(f"⚠️ Koneksi terputus ke {group_id}: {e}")
+            
+    except Exception as e:
+        catat_log(f"❌ Error keseluruhan saat mengirim via WhatsApp: {e}")
+    finally:
+        session.close()
 
 # ==========================================
-# 4. LOGIK UTAMA BOT
+# 6. LOGIK UTAMA BOT (TELEGRAM)
 # ==========================================
 @client.on(events.NewMessage(chats=ID_GRUP_TARGET))
 async def proses_dokumen_baru(event):
@@ -107,21 +253,27 @@ async def proses_dokumen_baru(event):
                 
                 df = df.iloc[:, :80]
                 df = df.fillna("")
-                
                 data_untuk_dikirim = df.values.tolist()
                 
-                catat_log(f"-> Data berhasil difilter: {len(data_untuk_dikirim)} baris ditemukan. Bersiap memperbarui Google Sheets...")
+                catat_log(f"-> Data berhasil difilter: {len(data_untuk_dikirim)} baris ditemukan. Memperbarui Google Sheets...")
                 
                 spreadsheet = client_gs.open_by_key(SPREADSHEET_ID)
                 worksheet = spreadsheet.get_worksheet_by_id(GID_SHEET_TARGET)
-                
-                catat_log("-> Menghapus data lama di Google Sheets (Hanya area A2:CB)...")
                 worksheet.batch_clear(["A2:CB"])
                 
                 if len(data_untuk_dikirim) > 0:
-                    catat_log("-> Menulis data baru ke Google Sheets mulai dari baris 2...")
                     worksheet.update(range_name='A2', values=data_untuk_dikirim)
                     catat_log(f"✅ SUKSES! {len(data_untuk_dikirim)} baris data berhasil ditimpa ke sheet.")
+                    catat_log("⏳ Menunggu 15 detik agar Google Sheets web ter-refresh...")
+                    await asyncio.sleep(15)
+                    
+                    path_ss = await ambil_screenshot()
+                    
+                    if os.path.exists(path_ss):
+                        optimalkan_resolusi(path_ss)
+                        await asyncio.to_thread(kirim_via_whatsapp, path_ss)
+                        hapus_file(path_ss)
+                    
                 else:
                     catat_log("⚠️ Proses selesai. Namun tidak ada data yang masuk kriteria (Cabang tidak ditemukan).")
 
@@ -133,7 +285,7 @@ async def proses_dokumen_baru(event):
                     hapus_file(lokasi_unduh)
 
 # ==========================================
-# 5. MENJALANKAN BOT
+# 7. MENJALANKAN BOT
 # ==========================================
 async def main():
     catat_log("Memulai koneksi ke Telegram...")
