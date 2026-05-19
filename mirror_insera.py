@@ -298,25 +298,47 @@ async def proses_dokumen_baru(event):
                     
                     rentang_1 = "B6:AG38"
                     rentang_2 = "B39:AG71"
-                    
-                    path_ss_1 = await ambil_screenshot(rentang_1, label="Part_1")
-                    if path_ss_1:
-                        optimalkan_resolusi(path_ss_1)
-                        await asyncio.to_thread(kirim_via_whatsapp, path_ss_1, "Part 1")
-                        hapus_file(path_ss_1)
-                    else:
-                        catat_log("⚠️ Melewati pengiriman Part 1 karena gagal screenshot.")
+                    MAX_RETRY = 5
+
+                    async def proses_screenshot(rentang, label, info):
+                        path_ss = await ambil_screenshot(rentang, label=label)
+                        if path_ss:
+                            optimalkan_resolusi(path_ss)
+                            await asyncio.to_thread(kirim_via_whatsapp, path_ss, info)
+                            hapus_file(path_ss)
+                            return True
+                        return False
+
+                    sukses_1 = await proses_screenshot(rentang_1, "Part_1", "Part 1")
+                    if not sukses_1:
+                        catat_log("⚠️ Part 1 gagal di percobaan pertama. Lanjut ke Part 2 dulu, Part 1 akan dicoba lagi setelahnya.")
 
                     catat_log("⏳ Jeda 5 detik sebelum mengambil screenshot bagian ke-2...")
                     await asyncio.sleep(5)
 
-                    path_ss_2 = await ambil_screenshot(rentang_2, label="Part_2")
-                    if path_ss_2:
-                        optimalkan_resolusi(path_ss_2)
-                        await asyncio.to_thread(kirim_via_whatsapp, path_ss_2, "Part 2") 
-                        hapus_file(path_ss_2)
-                    else:
-                        catat_log("⚠️ Melewati pengiriman Part 2 karena gagal screenshot.")
+                    sukses_2 = await proses_screenshot(rentang_2, "Part_2", "Part 2")
+                    if not sukses_2:
+                        catat_log("⚠️ Part 2 gagal di percobaan pertama. Akan dicoba ulang nanti.")
+
+                    for nama, rentang, label, info, sudah_sukses in [
+                        ("Part 1", rentang_1, "Part_1", "Part 1", sukses_1),
+                        ("Part 2", rentang_2, "Part_2", "Part 2", sukses_2),
+                    ]:
+                        if sudah_sukses:
+                            continue
+                        catat_log(f"🔁 Mencoba ulang screenshot {nama} (maks {MAX_RETRY}x)...")
+                        berhasil = False
+                        for percobaan_ulang in range(1, MAX_RETRY + 1):
+                            catat_log(f"🔁 Percobaan ulang {nama} ke-{percobaan_ulang}/{MAX_RETRY}...")
+                            await asyncio.sleep(10)
+                            if await proses_screenshot(rentang, label, info):
+                                catat_log(f"✅ {nama} akhirnya berhasil setelah {percobaan_ulang} percobaan ulang.")
+                                berhasil = True
+                                break
+                            else:
+                                catat_log(f"⚠️ Percobaan ulang {nama} ke-{percobaan_ulang} masih gagal.")
+                        if not berhasil:
+                            catat_log(f"❌ Menyerah pada {nama} setelah {MAX_RETRY} percobaan ulang.")
                     
                 else:
                     catat_log("⚠️ Proses selesai. Namun tidak ada data yang masuk kriteria (Cabang tidak ditemukan).")
