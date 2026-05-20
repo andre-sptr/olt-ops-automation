@@ -14,8 +14,8 @@ WAHA_URL = "https://waha-dutxvo095iqn.cgk-lab.sumopod.my.id"
 WAHA_SESSION = "OLTReport"
 WAHA_API_KEY = "ROpWNPkTUavqEbnz5zKU4mTiL0HIZoye"
 # 120363423984319917@g.us Test
-# 120363142428170648@g.us Real
-GROUP_ID_TUJUAN = "120363423984319917@g.us"
+# 120363408272932837@g.us Real
+GROUP_ID_TUJUAN = "120363408272932837@g.us"
 
 SPREADSHEET_ID = "1uS0uMw9yHnHOjt00lG8lUuw-ddYiV8882w7-gFZ74cA"
 URL_SPREADSHEET = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
