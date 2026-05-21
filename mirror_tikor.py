@@ -39,6 +39,15 @@ lock_bot = asyncio.Lock()
 INTERVAL_MIN = 15
 INTERVAL_MAX = 120
 INTERVAL_MULTIPLIER = 2
+TIMEOUT_BUBBLE_PERTAMA = 30
+BOT_DIAM_TIMEOUT = 5
+RESPON_POLL_INTERVAL = 1
+BATAS_PESAN_BOT = 20
+BOT_TIDAK_MENJAWAB = "Bot tidak menjawab, coba lagi"
+
+
+class BotTidakMenjawabError(TimeoutError):
+    pass
 
 def setup_google_sheets():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/spreadsheets",
@@ -66,7 +75,7 @@ def ekstrak_data_bot(teks_respon):
     match_invalid = re.search(r'(Invalid format\..*)', teks_respon, re.IGNORECASE)
     if match_invalid:
         return "Invalid format"
-    blok_alternatif = teks_respon.split("ALTERNATIF #")[1:]
+    blok_alternatif = re.split(r'ALTERNATIF\s*#', teks_respon, flags=re.IGNORECASE)[1:]
     hasil_odp = []
     for blok in blok_alternatif:
         baris_pertama = blok.split('\n')[0]
@@ -92,21 +101,112 @@ def ekstrak_data_bot(teks_respon):
 
     return " | ".join(hasil_odp)
 
-async def kirim_dan_terima(client, tikor):
+def pesan_berteks_urut(pesan_pesan):
+    pesan_berteks = [
+        (getattr(msg, "id", index), index, msg)
+        for index, msg in enumerate(pesan_pesan)
+        if msg.text
+    ]
+    pesan_berteks.sort(key=lambda item: (item[0], item[1]))
+    return [msg for _, _, msg in pesan_berteks]
+
+
+def gabungkan_teks_pesan(pesan_pesan):
+    return "\n".join([msg.text for msg in pesan_berteks_urut(pesan_pesan)])
+
+
+def tanda_tangan_pesan(pesan_pesan):
+    return tuple(
+        (getattr(msg, "id", index), msg.text)
+        for index, msg in enumerate(pesan_berteks_urut(pesan_pesan))
+    )
+
+
+async def tunggu_teks_balasan_bot(
+    client,
+    pesan_kirim_id,
+    timeout_bubble_pertama=TIMEOUT_BUBBLE_PERTAMA,
+    idle_timeout=BOT_DIAM_TIMEOUT,
+    poll_interval=RESPON_POLL_INTERVAL,
+    sleep=asyncio.sleep,
+    time_func=None,
+):
+    loop = asyncio.get_running_loop()
+    if time_func is None:
+        time_func = loop.time
+
+    batas_bubble_pertama = time_func() + timeout_bubble_pertama
+    batas_bot_diam = None
+    signature_terakhir = ()
+    teks_terakhir = ""
+
+    while True:
+        pesan_pesan = await client.get_messages(
+            USERNAME_BOT,
+            min_id=pesan_kirim_id,
+            limit=BATAS_PESAN_BOT,
+        )
+        signature_saat_ini = tanda_tangan_pesan(pesan_pesan)
+
+        if signature_saat_ini:
+            if signature_saat_ini != signature_terakhir:
+                signature_terakhir = signature_saat_ini
+                teks_terakhir = gabungkan_teks_pesan(pesan_pesan)
+                batas_bot_diam = time_func() + idle_timeout
+                print(
+                    f"   Menerima {len(signature_saat_ini)} bubble bot, "
+                    f"tunggu bot diam {idle_timeout} detik..."
+                )
+            elif batas_bot_diam is not None and time_func() >= batas_bot_diam:
+                print(
+                    f"   Bot diam {idle_timeout} detik, "
+                    f"balasan dianggap selesai ({len(signature_saat_ini)} bubble)."
+                )
+                return teks_terakhir
+
+        elif time_func() >= batas_bubble_pertama:
+            raise BotTidakMenjawabError(
+                f"Bot tidak mengirim bubble pertama setelah {timeout_bubble_pertama} detik."
+            )
+
+        await sleep(poll_interval)
+
+async def kirim_dan_terima(
+    client,
+    tikor,
+    timeout_bubble_pertama=TIMEOUT_BUBBLE_PERTAMA,
+    idle_timeout=BOT_DIAM_TIMEOUT,
+    poll_interval=RESPON_POLL_INTERVAL,
+    sleep=asyncio.sleep,
+    time_func=None,
+):
     """Kirim tikor ke bot dan tunggu balasan. Dilindungi lock agar tidak race."""
     async with lock_bot:
         pesan_kirim = await client.send_message(USERNAME_BOT, f'/check {tikor}')
-        print("   Menunggu balasan bot (18 detik)...")
-        await asyncio.sleep(18)
+        print(
+            f"   Menunggu bubble pertama bot (maks {timeout_bubble_pertama} detik), "
+            f"lalu tunggu bot diam {idle_timeout} detik..."
+        )
 
-        pesan_pesan = await client.get_messages(USERNAME_BOT, min_id=pesan_kirim.id, limit=10)
-        teks_gabungan = "\n".join([msg.text for msg in reversed(pesan_pesan) if msg.text])
+        try:
+            teks_gabungan = await tunggu_teks_balasan_bot(
+                client,
+                pesan_kirim.id,
+                timeout_bubble_pertama=timeout_bubble_pertama,
+                idle_timeout=idle_timeout,
+                poll_interval=poll_interval,
+                sleep=sleep,
+                time_func=time_func,
+            )
+        except BotTidakMenjawabError as e:
+            print(f"   {e}")
+            return BOT_TIDAK_MENJAWAB
 
         hasil_akhir = ekstrak_data_bot(teks_gabungan)
         if not hasil_akhir:
             hasil_akhir = "Tidak ditemukan ODP < 230m"
 
-        await asyncio.sleep(2)
+        await sleep(2)
         return hasil_akhir
 
 async def proses_check_tikor(client, sheet_cfg):
