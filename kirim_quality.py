@@ -37,6 +37,10 @@ KOL_INDICATOR = "M"
 
 JUDUL = "Report Tiket Quality"
 HEADER = "District | Incident | Site ID | TTRq | Indicator"
+
+# Hanya district berikut yang dikirim. Nilai dinormalisasi (kapital, tanpa spasi)
+# sehingga "BUKIT TINGGI" dan "BUKITTINGGI" sama-sama lolos.
+DISTRICT_DIIZINKAN = {"PEKANBARU", "DUMAI", "BATAM", "PADANG", "BUKITTINGGI"}
 # =================================================
 
 
@@ -86,6 +90,10 @@ def kolom_ke_indeks(huruf):
     for karakter in label:
         hasil = hasil * 26 + (ord(karakter) - ord("A") + 1)
     return hasil - 1
+
+
+def normalisasi_distrik(nama):
+    return str(nama or "").strip().upper().replace(" ", "")
 
 
 def nilai_cell(semua_nilai, row_idx, col_idx):
@@ -151,6 +159,9 @@ def ekstrak_tiket_open(semua_nilai):
             continue
 
         district = nilai_cell(semua_nilai, row_idx, idx_district)
+        if normalisasi_distrik(district) not in DISTRICT_DIIZINKAN:
+            continue
+
         incident = nilai_cell(semua_nilai, row_idx, idx_incident)
         site_id = nilai_cell(semua_nilai, row_idx, idx_site)
         ttrq_hari = nilai_cell(semua_nilai, row_idx, idx_hari)
