@@ -37,7 +37,7 @@ KOL_INDICATOR = "M"
 
 JUDUL = "Report Tiket Quality"
 HEADER = "District | Incident | Site ID | TTRq | Indicator"
-PEMISAH = "-" * 65  # garis pemisah antar-district
+PEMISAH = "-" * 56  # garis pemisah antar-district
 
 # Hanya district berikut yang dikirim, sekaligus jadi urutan tampil per grup.
 # Nilai dinormalisasi (kapital, tanpa spasi) sehingga "BUKIT TINGGI" dan
