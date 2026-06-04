@@ -37,10 +37,13 @@ KOL_INDICATOR = "M"
 
 JUDUL = "Report Tiket Quality"
 HEADER = "District | Incident | Site ID | TTRq | Indicator"
+PEMISAH = "-" * 42  # garis pemisah antar-district
 
-# Hanya district berikut yang dikirim. Nilai dinormalisasi (kapital, tanpa spasi)
-# sehingga "BUKIT TINGGI" dan "BUKITTINGGI" sama-sama lolos.
-DISTRICT_DIIZINKAN = {"PEKANBARU", "DUMAI", "BATAM", "PADANG", "BUKITTINGGI"}
+# Hanya district berikut yang dikirim, sekaligus jadi urutan tampil per grup.
+# Nilai dinormalisasi (kapital, tanpa spasi) sehingga "BUKIT TINGGI" dan
+# "BUKITTINGGI" sama-sama lolos.
+DISTRICT_URUTAN = ["PEKANBARU", "DUMAI", "BATAM", "PADANG", "BUKITTINGGI"]
+DISTRICT_DIIZINKAN = set(DISTRICT_URUTAN)
 # =================================================
 
 
@@ -188,9 +191,17 @@ def buat_pesan(rows):
     if not rows:
         return f"{judul}\nTidak ada tiket Quality OPEN."
 
-    lines = [judul, HEADER, ""]
-    lines.extend(" | ".join(row) for row in rows)
-    return "\n".join(lines)
+    # Kelompokkan baris per district (urut sheet di dalam grup).
+    grup = {}
+    for row in rows:
+        kunci = normalisasi_distrik(row[0])
+        grup.setdefault(kunci, []).append(" | ".join(row))
+
+    urutan = [d for d in DISTRICT_URUTAN if d in grup]
+    urutan += [d for d in grup if d not in DISTRICT_URUTAN]  # jaga-jaga di luar daftar
+
+    blok = ["\n".join(grup[d]) for d in urutan]
+    return f"{judul}\n{HEADER}\n\n" + f"\n{PEMISAH}\n".join(blok)
 
 
 def kirim_teks_wa(chat_id, teks):
