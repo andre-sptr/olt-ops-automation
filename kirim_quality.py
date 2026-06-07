@@ -1,19 +1,28 @@
-import csv
-import io
 import os
 from datetime import datetime
+
+try:
+    import gspread
+except ModuleNotFoundError:
+    gspread = None
 
 try:
     import requests
 except ModuleNotFoundError:
     requests = None
 
+try:
+    from oauth2client.service_account import ServiceAccountCredentials
+except ModuleNotFoundError:
+    ServiceAccountCredentials = None
+
 
 # ================== KONFIGURASI ==================
-# Spreadsheet bersifat publik (siapa pun dengan link = editor), jadi datanya
-# diambil lewat endpoint export CSV tanpa kredensial / Service Account.
+# Sheet dibaca via Service Account (gspread). Sheet harus di-share ke email
+# service account (lihat client_email di kunci_rahasia_google.json) min. Viewer.
 SPREADSHEET_ID = "1nFIBj5EjoyQxjcLAYF0kfnEN_5wKUsNvp03stW7csUw"
-GID_SHEET = "1416909766"
+GID_SHEET = 1416909766
+FILE_KREDENSIAL = "kunci_rahasia_google.json"
 
 WAHA_URL = "https://waha-dutxvo095iqn.cgk-lab.sumopod.my.id"
 WAHA_SESSION = "OLTReport"
@@ -108,35 +117,33 @@ def nilai_cell(semua_nilai, row_idx, col_idx):
     return str(row[col_idx]).strip()
 
 
-def url_export_csv():
-    return (
-        f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
-        f"/export?format=csv&gid={GID_SHEET}"
-    )
+def buka_worksheet():
+    missing = []
+    if gspread is None:
+        missing.append("gspread")
+    if ServiceAccountCredentials is None:
+        missing.append("oauth2client.service_account.ServiceAccountCredentials")
+    if missing:
+        pesan = "Dependency Google Sheet belum tersedia: " + ", ".join(missing)
+        catat_log(pesan)
+        raise RuntimeError(pesan)
+
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(FILE_KREDENSIAL, scope)
+    client_gs = gspread.authorize(creds)
+    spreadsheet = client_gs.open_by_key(SPREADSHEET_ID)
+    return spreadsheet.get_worksheet_by_id(GID_SHEET)
 
 
 def ambil_semua_nilai():
-    """Ambil seluruh isi sheet sebagai list-of-list lewat export CSV publik."""
-    if requests is None:
-        catat_log("Dependency belum tersedia: requests")
-        raise RuntimeError("requests tidak tersedia")
-
-    url = url_export_csv()
-    response = requests.get(url, timeout=60, allow_redirects=True)
-    response.raise_for_status()
-
-    konten = response.content.decode("utf-8", errors="replace")
-    # Kalau sheet tidak benar-benar publik, Google mengembalikan HTML login,
-    # bukan CSV. Deteksi dan beri pesan jelas.
-    awal = konten.lstrip()[:200].lower()
-    if awal.startswith("<!doctype html") or "<html" in awal:
-        raise RuntimeError(
-            "Sheet tidak bisa diakses publik (dapat HTML, bukan CSV). "
-            "Pastikan share-nya 'anyone with the link'."
-        )
-
-    pembaca = csv.reader(io.StringIO(konten))
-    return [list(baris) for baris in pembaca]
+    """Ambil seluruh isi sheet sebagai list-of-list lewat Service Account."""
+    worksheet = buka_worksheet()
+    return worksheet.get_all_values()
 
 
 def format_ttrq(jam, hari):
