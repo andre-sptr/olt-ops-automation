@@ -65,6 +65,7 @@ RAW_PIC_DISTRIK = {
 }
 
 GARIS = "=" * 12
+JUDUL_PESAN = "*List ORM*"
 JEDA_KIRIM = 2
 # =================================================
 
@@ -271,6 +272,7 @@ def baris_cc_distrik(distrik_norm):
 
 def buat_pesan_distrik(distrik_norm, bucket):
     lines = [
+        JUDUL_PESAN,
         nama_distrik_tampil(distrik_norm),
         GARIS,
     ]

@@ -54,6 +54,7 @@ KOLOM = {
 DISTRICT_URUTAN = ["PEKANBARU", "DUMAI", "BATAM", "PADANG", "BUKITTINGGI"]
 DISTRICT_DIIZINKAN = set(DISTRICT_URUTAN)
 
+JUDUL_PESAN = "*Tiket Quality Open*"
 GARIS = "=" * 12  # garis di bawah judul "Branch <District>"
 JEDA_KIRIM = 2    # jeda detik antar pengiriman bubble per district
 # =================================================
@@ -219,7 +220,7 @@ def buat_blok_tiket(tiket):
 def buat_pesan_distrik(distrik_norm, tikets):
     judul = f"Branch {nama_distrik_tampil(distrik_norm)}"
     blok = [buat_blok_tiket(t) for t in tikets]
-    return f"{judul}\n{GARIS}\n" + "\n\n".join(blok)
+    return f"{JUDUL_PESAN}\n{judul}\n{GARIS}\n" + "\n\n".join(blok)
 
 
 def kirim_teks_wa(chat_id, teks):

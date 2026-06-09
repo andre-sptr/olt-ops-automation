@@ -74,6 +74,7 @@ class KirimOrmTests(TestCase):
         text = ko.buat_pesan_distrik("PADANG", data["PADANG"])
 
         self.assertEqual(text, "\n".join([
+            "List ORM",
             "Padang",
             "============",
             "ORM:",
@@ -81,14 +82,14 @@ class KirimOrmTests(TestCase):
             "2. Link Radio IP LH from Siberut Utara to Bukit Silasung | 0,00% | -",
             "Non-ORM:",
             "1. QE ASK025 -> nitip di project bges | 50,00% | Titip project BGES",
-            "cc @628116393933 @6282284545038",
+            "cc @6281289149112",
         ]))
 
     def test_baris_cc_distrik_uses_manja_pic_mapping(self):
         cc_line, mentions = ko.baris_cc_distrik("PADANG")
 
-        self.assertEqual(cc_line, "cc @628116393933 @6282284545038")
-        self.assertEqual(mentions, ["628116393933@c.us", "6282284545038@c.us"])
+        self.assertEqual(cc_line, "cc @6281289149112")
+        self.assertEqual(mentions, ["6281289149112@c.us"])
 
     def test_tugas_sends_one_bubble_per_district(self):
         sent = []
@@ -108,8 +109,8 @@ class KirimOrmTests(TestCase):
 
         self.assertEqual(len(sent), 2)
         self.assertEqual(sent[0][0], ko.GROUP_ID_TUJUAN)
-        self.assertTrue(sent[0][1].startswith("Pekanbaru\n============\nORM:"))
-        self.assertTrue(sent[1][1].startswith("Padang\n============\nORM:"))
-        self.assertEqual(sent[0][2], ["6281261323575@c.us", "628126465895@c.us"])
-        self.assertEqual(sent[1][2], ["628116393933@c.us", "6282284545038@c.us"])
+        self.assertTrue(sent[0][1].startswith("List ORM\nPekanbaru\n============\nORM:"))
+        self.assertTrue(sent[1][1].startswith("List ORM\nPadang\n============\nORM:"))
+        self.assertEqual(sent[0][2], ["6281372264429@c.us"])
+        self.assertEqual(sent[1][2], ["6281289149112@c.us"])
         self.assertTrue(any("Ditemukan 4 list ORM/NON-ORM" in pesan for pesan in logs))
