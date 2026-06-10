@@ -16,6 +16,7 @@ data/*.db-journal
 
 # Python
 __pycache__/
+.pytest_cache
 *.py[cod]
 *$py.class
 *.egg-info/

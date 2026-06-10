@@ -3,6 +3,12 @@ from datetime import datetime
 import gspread
 from gspread.utils import rowcol_to_a1
 from oauth2client.service_account import ServiceAccountCredentials
+from perform_rollover import (
+    indeks_baris_harian,
+    label_bulan_indonesia,
+    pastikan_bulan_aktif,
+    waktu_wib,
+)
 import re
 import os
 
@@ -179,21 +185,29 @@ async def proses_pesan_baru(event):
             com_val = ""
             if isinstance(hasil_durasi, (int, float)):
                 com_val = "C" if hasil_durasi <= 360 else "NC"
-                
-            bulan_sekarang = datetime.now().strftime("%B %Y")
-            tanggal_hari_ini = datetime.now().day 
-            baris_data_baru = [""] * 37
-            
-            baris_data_baru[1] = node_id_target
-            baris_data_baru[2] = district_val   
-            baris_data_baru[3] = rca_val
-            baris_data_baru[35] = com_val
-            baris_data_baru[36] = bulan_sekarang
-            
-            kolom_tanggal = 3 + tanggal_hari_ini
-            baris_data_baru[kolom_tanggal] = hasil_durasi 
 
             try:
+                sekarang = waktu_wib()
+                rollover = pastikan_bulan_aktif(
+                    spreadsheet,
+                    worksheet,
+                    sekarang,
+                )
+                if rollover.archived:
+                    simpan_log(
+                        f"-> Data bulan lama diarsipkan ke {rollover.archive_name}."
+                    )
+
+                baris_data_baru = [""] * 37
+                baris_data_baru[1] = node_id_target
+                baris_data_baru[2] = district_val
+                baris_data_baru[3] = rca_val
+                baris_data_baru[35] = com_val
+                baris_data_baru[36] = label_bulan_indonesia(sekarang)
+
+                kolom_tanggal = indeks_baris_harian(sekarang.day)
+                baris_data_baru[kolom_tanggal] = hasil_durasi
+
                 kolom_b = worksheet.col_values(2) 
                 
                 baris_target = len(kolom_b) + 1 
@@ -278,6 +292,17 @@ async def proses_pesan_baru(event):
                 simpan_log(f"-> Memproses NE: {ne_hostname} | Witel: {witel_val} | Distrik: {distrik_val} | RCA: {rca_val} | Durasi: {hasil_durasi}m")
             
                 try:
+                    sekarang = waktu_wib()
+                    rollover = pastikan_bulan_aktif(
+                        spreadsheet,
+                        worksheet,
+                        sekarang,
+                    )
+                    if rollover.archived:
+                        simpan_log(
+                            f"-> Data bulan lama diarsipkan ke {rollover.archive_name}."
+                        )
+
                     kolom_b = worksheet.col_values(2)
                     baris_target = -1
                     hitung_header_ne = 0
@@ -301,18 +326,16 @@ async def proses_pesan_baru(event):
                     com_val = ""
                     if isinstance(hasil_durasi, (int, float)):
                         com_val = "C" if hasil_durasi <= 360 else "NC"
-                        
-                    bulan_sekarang = datetime.now().strftime("%B %Y")
-                    tanggal_hari_ini = datetime.now().day 
+
                     baris_data_baru = [""] * 37
                     
                     baris_data_baru[1] = ne_hostname
                     baris_data_baru[2] = distrik_val   
                     baris_data_baru[3] = rca_val  
                     baris_data_baru[35] = com_val
-                    baris_data_baru[36] = bulan_sekarang
+                    baris_data_baru[36] = label_bulan_indonesia(sekarang)
                     
-                    kolom_tanggal = 3 + tanggal_hari_ini
+                    kolom_tanggal = indeks_baris_harian(sekarang.day)
                     baris_data_baru[kolom_tanggal] = hasil_durasi 
 
                     worksheet.insert_row(baris_data_baru, baris_target)
@@ -349,6 +372,15 @@ async def proses_pesan_baru(event):
 
 async def main():
     simpan_log("Memulai koneksi ke Telegram...")
+    rollover = pastikan_bulan_aktif(
+        spreadsheet,
+        worksheet,
+        waktu_wib(),
+    )
+    if rollover.archived:
+        simpan_log(
+            f"Data bulan lama berhasil diarsipkan ke {rollover.archive_name}."
+        )
     await client.get_dialogs() 
     simpan_log(f"🚀 Program Real-time Aktif! Mendengarkan {len(daftar_grup_target)} grup...")
     await client.run_until_disconnected()
