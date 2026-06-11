@@ -12,6 +12,10 @@ Remove-Item Env:BRAINSTORM_OWNER_PID -ErrorAction SilentlyContinue
 $server = "C:\Users\anant\.codex\plugins\cache\openai-curated\superpowers\c6ea566d\skills\brainstorming\scripts\server.cjs"
 $stdout = Join-Path $state "server.log"
 $stderr = Join-Path $state "server.err"
+$info = Join-Path $state "server-info"
+$stopped = Join-Path $state "server-stopped"
+
+Remove-Item $info, $stopped, $stdout, $stderr -Force -ErrorAction SilentlyContinue
 
 $process = Start-Process `
     -FilePath "C:\Program Files\nodejs\node.exe" `
@@ -23,7 +27,6 @@ $process = Start-Process `
     -RedirectStandardError $stderr
 
 for ($attempt = 0; $attempt -lt 50; $attempt++) {
-    $info = Join-Path $state "server-info"
     if (Test-Path $info) {
         Write-Output "PID=$($process.Id)"
         Get-Content $info

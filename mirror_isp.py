@@ -182,9 +182,10 @@ def durasi_ke_menit(durasi):
     return total_menit
 
 
-def ambil_olt_down_lebih_satu_jam(data_down=None):
+def ambil_olt_down_lebih_satu_jam(data_down=None, hostname_pemicu=None):
     sumber_data = data_gpon_down if data_down is None else data_down
     hasil = []
+    ada_pemicu = False
 
     for hostname_kunci, info in sumber_data.items():
         bagian = [nilai.strip() for nilai in str(info or "").split("|")]
@@ -204,6 +205,14 @@ def ambil_olt_down_lebih_satu_jam(data_down=None):
             }
         )
 
+        if hostname_pemicu and hostname_kunci in hostname_pemicu:
+            ada_pemicu = True
+
+    # Jika hostname_pemicu diberikan tapi tidak ada satupun hostname
+    # yang baru di-update memiliki durasi > 1 jam, jangan trigger eskalasi
+    if hostname_pemicu is not None and not ada_pemicu:
+        return []
+
     return hasil
 
 
@@ -211,6 +220,7 @@ def buat_pesan_eskalasi(
     daftar_down=None,
     manager_numbers=None,
     officer_by_district=None,
+    mapping_metadata=None,
 ):
     if daftar_down is None:
         daftar_down = ambil_olt_down_lebih_satu_jam()
@@ -221,6 +231,9 @@ def buat_pesan_eskalasi(
         manager_numbers = RAW_MANAGER_WA
     if officer_by_district is None:
         officer_by_district = RAW_OFFICER_DISTRIK
+
+    if mapping_metadata is None:
+        mapping_metadata = {}
 
     managers = normalisasi_daftar_nomor(manager_numbers)
     officers = {
@@ -234,7 +247,10 @@ def buat_pesan_eskalasi(
         distrik = normalisasi_distrik(insiden.get("district"))
         hostname = normalisasi_hostname(insiden.get("hostname")) or "-"
         durasi = str(insiden.get("duration") or "-").strip()
-        lines.append(f"🔴 {distrik or 'UNKNOWN'} | {hostname} | {durasi}")
+        metadata = mapping_metadata.get(hostname, {})
+        severity = normalisasi_severity(metadata.get("severity", ""))
+        severity_tampil = EMOJI_SEVERITY.get(severity, "🔴")
+        lines.append(f"{severity_tampil} {distrik or 'UNKNOWN'} | {hostname} | {durasi}")
         if distrik and distrik not in distrik_terdampak:
             distrik_terdampak.append(distrik)
 
@@ -446,6 +462,7 @@ async def proses_pesan_baru(event):
         baris_pesan = teks_pesan.split('\n')
         
         ada_perubahan = False
+        hostname_terupdate = set()
 
         if '!PROGRAM ZERO GAMAS OLT!' in teks_pesan_upper:
             nama_distrik = "UNKNOWN"
@@ -463,6 +480,7 @@ async def proses_pesan_baru(event):
                         data_gabungan = f"{nama_distrik} | {baris.strip()}"
                         data_gpon_down[hostname] = data_gabungan
                         ada_perubahan = True
+                        hostname_terupdate.add(hostname)
                         
                         if hostname in data_gpon_up:
                             del data_gpon_up[hostname]
@@ -482,11 +500,30 @@ async def proses_pesan_baru(event):
 
         if ada_perubahan:
             simpan_log("🔔 Perubahan data GPON terdeteksi. Memperbarui laporan...")
-            teks_laporan_baru = buat_laporan_list()
+
+            try:
+                mapping_metadata = ambil_mapping_metadata()
+                simpan_log(
+                    f"Berhasil mengambil {len(mapping_metadata)} data metadata OLT "
+                    f"dari GID {GID_SHEET_METADATA}"
+                )
+            except Exception as exc:
+                mapping_metadata = {}
+                simpan_log(
+                    f"Gagal mengambil metadata OLT, menggunakan '-': {exc}"
+                )
+
+            teks_laporan_baru = buat_laporan_list(mapping_metadata)
             simpan_ke_file_laporan(teks_laporan_baru)
             kirim_pesan_wa(teks_laporan_baru)
 
-            teks_eskalasi, mentions = buat_pesan_eskalasi()
+            daftar_eskalasi = ambil_olt_down_lebih_satu_jam(
+                hostname_pemicu=hostname_terupdate
+            )
+            teks_eskalasi, mentions = buat_pesan_eskalasi(
+                daftar_down=daftar_eskalasi,
+                mapping_metadata=mapping_metadata,
+            )
             if teks_eskalasi:
                 kirim_pesan_wa(teks_eskalasi, mentions)
 
