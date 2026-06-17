@@ -1,0 +1,48 @@
+# Environment
+.env
+.venv/
+venv/
+env/
+
+# Telegram session files
+*.session
+*.session-journal
+
+# Database
+data/*.db
+data/*.db-journal
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+.pytest_cache/
+.pytest_*/
+.superpowers/
+.worktrees/
+.karina-playwright-profile*/
+auto_approve.log
+auto_approve_result.csv
+auto_approve_debug_*.log
+auto_approve_debug_*_result.csv
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / Credentials
+kunci_rahasia_google.json
+vertex-ai-service.json
+*.json
+
+# Ignore all JSON files if they contain secrets, but specifically the ones identified
