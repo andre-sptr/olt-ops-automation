@@ -40,6 +40,7 @@ KOLOM = {
     "district": "A",
     "list": "B",
     "jenis": "C",
+    "status": "E",
     "ach": "F",
     "progress": "G",
 }
@@ -231,6 +232,7 @@ def ekstrak_data_per_distrik(semua_nilai):
 
         hasil[distrik_norm][jenis].append({
             "list": list_pekerjaan,
+            "status": nilai_cell(semua_nilai, row_idx, idx["status"]),
             "ach": nilai_cell(semua_nilai, row_idx, idx["ach"]),
             "progress": nilai_cell(semua_nilai, row_idx, idx["progress"]),
         })
@@ -243,11 +245,14 @@ def ada_data_distrik(bucket):
 
 
 def buat_baris_item(nomor, item):
-    return (
+    baris = (
         f"{nomor}. {isi_atau_strip(item.get('list'))} | "
         f"{isi_atau_strip(item.get('ach'))} | "
         f"{isi_atau_strip(item.get('progress'))}"
     )
+    if str(item.get('status', '')).strip().lower() == "closed":
+        baris += " ✅"
+    return baris
 
 
 def tambah_bagian(lines, judul, items):
@@ -275,6 +280,7 @@ def buat_pesan_distrik(distrik_norm, bucket):
         JUDUL_PESAN,
         nama_distrik_tampil(distrik_norm),
         GARIS,
+        "LIST | TARGET | DONE",
     ]
 
     tambah_bagian(lines, "ORM:", bucket.get(JENIS_ORM, []))
