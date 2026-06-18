@@ -238,6 +238,8 @@ def buat_caption(spesifikasi, data):
         out.append(f"*{label_utama}* : {cur} {_tren(cur, prv)}".rstrip())
         for d in DISTRICTS:
             out.append("  " + baris(f"• {d.title()}", kolom, d))
+        # Baris regional di bawah PEKANBARU, sejajar dengan tabel di gambar.
+        out.append("  " + baris("• Sumbagteng", kolom, "TOTAL"))
         return out
 
     lines = []
