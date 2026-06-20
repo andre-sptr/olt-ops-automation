@@ -584,7 +584,7 @@ def bangun_baris_realert_rekap(baris_lama, info, hostname, timestamp):
 
 
 def rencana_tulis_rekap(semua_nilai, mapping_metadata, down_items, up_items, waktu):
-    """Tentukan update in-place & baris append untuk rekap insiden OLT.
+    """Tentukan baris append untuk log semua alert OLT.
 
     Return (updates, appends):
       updates = [(nomor_baris_1based, baris14), ...]
@@ -603,33 +603,27 @@ def rencana_tulis_rekap(semua_nilai, mapping_metadata, down_items, up_items, wak
         hostname = normalisasi_hostname(bagian[1])
         if not hostname:
             continue
-        if hostname in aktif:
-            nomor_baris = aktif[hostname]
-            baris_lama = semua_nilai[nomor_baris - 1]
-            baris = bangun_baris_realert_rekap(
-                baris_lama, info, hostname, timestamp
-            )
-            updates.append((nomor_baris, baris))
-        else:
-            baris = bangun_baris_rekap(
-                no_berikutnya, info, mapping_metadata, "DOWN", timestamp
-            )
-            appends.append(baris)
-            no_berikutnya += 1
+        baris = bangun_baris_rekap(
+            no_berikutnya, info, mapping_metadata, "DOWN", timestamp
+        )
+        appends.append(baris)
+        no_berikutnya += 1
 
     for item in up_items or []:
         hostname = normalisasi_hostname(item.get("hostname"))
         if not hostname or hostname not in aktif:
-            continue  # tak ada insiden aktif -> tak ada yang difinalisasi
+            continue  # tak ada data DOWN sebelumnya untuk disalin ke log UP
         nomor_baris = aktif[hostname]
         baris = [str(x or "").strip() for x in semua_nilai[nomor_baris - 1]]
         baris += [""] * (14 - len(baris))
+        baris[0] = str(no_berikutnya)
         durasi_total = hitung_durasi_total(item.get("started_at"), waktu)
         if durasi_total:
             baris[3] = durasi_total
         baris[12] = "UP"
         baris[13] = timestamp
-        updates.append((nomor_baris, baris))
+        appends.append(baris[:14])
+        no_berikutnya += 1
 
     return updates, appends
 
@@ -819,6 +813,7 @@ async def proses_pesan_baru(event):
         
         ada_perubahan = False
         hostname_terupdate = set()
+        down_rekap_items = []
         up_rekap_items = []
 
         if '!PROGRAM ZERO GAMAS OLT!' in teks_pesan_upper:
@@ -861,6 +856,7 @@ async def proses_pesan_baru(event):
                         )
                         ada_perubahan = True
                         hostname_terupdate.add(hostname)
+                        down_rekap_items.append(data_gabungan)
                         
                         if hostname in data_gpon_up:
                             del data_gpon_up[hostname]
@@ -925,11 +921,6 @@ async def proses_pesan_baru(event):
             simpan_ke_file_laporan(teks_laporan_baru)
             kirim_pesan_wa(teks_laporan_baru)
 
-            down_rekap_items = [
-                data_gpon_down[h]
-                for h in hostname_terupdate
-                if h in data_gpon_down
-            ]
             if down_rekap_items or up_rekap_items:
                 try:
                     tulis_rekap_olt(
