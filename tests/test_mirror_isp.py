@@ -427,3 +427,22 @@ class TestBangunBarisRekap(TestCase):
         self.assertEqual(baris[5], "NB")
         self.assertEqual(baris[6:11], ["0", "0", "0", "-", "-"])
         self.assertEqual(baris[12], "DOWN")
+
+
+class TestIndeksInsidenAktif(TestCase):
+    def test_hanya_status_down_dan_paling_bawah(self):
+        semua_nilai = [
+            mi.HEADER_REKAP,
+            ["1", "DUMAI", "GPON00-A", "05:50", "Very Low", "0", "0", "0",
+             "0", "NON", "NOK", "Kabel CUT", "UP", "20/06/2026 07:00:00"],
+            ["2", "DUMAI", "GPON00-B", "01:00", "Very Low", "0", "0", "0",
+             "0", "NON", "NOK", "Kabel CUT", "DOWN", "20/06/2026 07:30:00"],
+            ["3", "DUMAI", "GPON00-B", "00:10", "Very Low", "0", "0", "0",
+             "0", "NON", "NOK", "Kabel CUT", "DOWN", "20/06/2026 09:00:00"],
+        ]
+        indeks = mi.indeks_insiden_aktif(semua_nilai)
+        self.assertNotIn("GPON00-A", indeks)   # UP, bukan aktif
+        self.assertEqual(indeks["GPON00-B"], 4)  # baris paling bawah (1-based)
+
+    def test_sheet_kosong_header_saja(self):
+        self.assertEqual(mi.indeks_insiden_aktif([mi.HEADER_REKAP]), {})

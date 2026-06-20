@@ -551,6 +551,21 @@ def bangun_baris_rekap(no, info, mapping_metadata, status, timestamp):
     ]
 
 
+def indeks_insiden_aktif(semua_nilai):
+    """Peta hostname -> nomor baris (1-based) untuk baris STATUS=DOWN."""
+    indeks = {}
+    for i, baris in enumerate(semua_nilai):
+        if i == 0:
+            continue  # header
+        nilai = [str(item or "").strip() for item in baris]
+        nilai += [""] * (14 - len(nilai))
+        hostname = normalisasi_hostname(nilai[2])
+        status = nilai[12].strip().upper()
+        if hostname and status == "DOWN":
+            indeks[hostname] = i + 1
+    return indeks
+
+
 def format_baris_down(no, info, mapping_metadata):
     bagian = [nilai.strip() for nilai in str(info or "").split("|")]
     bagian += [""] * (4 - len(bagian))
