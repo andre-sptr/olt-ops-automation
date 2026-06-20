@@ -65,6 +65,13 @@ RAW_OFFICER_DISTRIK = {
 SPREADSHEET_ID_METADATA = "1crQdVmqXoROtuiaB4-ce7sIwJh26oxKMPq3Mj6-GyLU"
 GID_SHEET_METADATA = 1706912635
 GID_SHEET_DH = 1918665126
+GID_SHEET_REKAP = 320650666
+
+HEADER_REKAP = [
+    "NO", "DISTRICT", "HOSTNAME", "DURASI DOWN", "SEVERITY",
+    "NodeB", "OLO", "K2", "K3", "DH", "DS", "HIPOTESA",
+    "STATUS", "TIMESTAMP",
+]
 FILE_KREDENSIAL_GOOGLE = "kunci_rahasia_google.json"
 
 SEVERITY_VALID = {
@@ -223,6 +230,22 @@ def normalisasi_waktu(waktu):
     if getattr(waktu, "tzinfo", None) is not None:
         return waktu.replace(tzinfo=None)
     return waktu
+
+
+def format_timestamp_rekap(waktu):
+    waktu = normalisasi_waktu(waktu) or datetime.now()
+    return waktu.strftime("%d/%m/%Y %H:%M:%S")
+
+
+def hitung_durasi_total(started_at, waktu_up):
+    started_at = normalisasi_waktu(started_at)
+    waktu_up = normalisasi_waktu(waktu_up)
+    if started_at is None or waktu_up is None:
+        return None
+    total_menit = int((waktu_up - started_at).total_seconds() // 60)
+    if total_menit < 0:
+        return None
+    return f"{total_menit // 60:02d}:{total_menit % 60:02d}"
 
 
 def waktu_mulai_alarm(waktu_pesan, durasi):

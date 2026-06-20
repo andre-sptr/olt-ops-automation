@@ -357,3 +357,35 @@ class TestProsesPesanBaru(TestCase):
 
         self.assertIn("GPON00-D1-AMK-2KMT", mi.data_gpon_down)
         self.assertIn("PLN00-D1-AMK-2KMT", mi.data_pln_down)
+
+
+class TestHelperRekap(TestCase):
+    def test_header_punya_14_kolom_urutan_benar(self):
+        self.assertEqual(
+            mi.HEADER_REKAP,
+            ["NO", "DISTRICT", "HOSTNAME", "DURASI DOWN", "SEVERITY",
+             "NodeB", "OLO", "K2", "K3", "DH", "DS", "HIPOTESA",
+             "STATUS", "TIMESTAMP"],
+        )
+        self.assertEqual(mi.GID_SHEET_REKAP, 320650666)
+
+    def test_format_timestamp_rekap(self):
+        from datetime import datetime
+        hasil = mi.format_timestamp_rekap(datetime(2026, 6, 20, 7, 8, 24))
+        self.assertEqual(hasil, "20/06/2026 07:08:24")
+
+    def test_hitung_durasi_total_jam_menit(self):
+        from datetime import datetime
+        started = datetime(2026, 6, 20, 1, 18, 24)
+        up = datetime(2026, 6, 20, 7, 8, 24)
+        self.assertEqual(mi.hitung_durasi_total(started, up), "05:50")
+
+    def test_hitung_durasi_total_none_saat_started_kosong(self):
+        from datetime import datetime
+        self.assertIsNone(mi.hitung_durasi_total(None, datetime(2026, 6, 20, 7, 0)))
+
+    def test_hitung_durasi_total_none_saat_negatif(self):
+        from datetime import datetime
+        started = datetime(2026, 6, 20, 8, 0)
+        up = datetime(2026, 6, 20, 7, 0)
+        self.assertIsNone(mi.hitung_durasi_total(started, up))
