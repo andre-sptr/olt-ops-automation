@@ -351,6 +351,7 @@ class TestProsesPesanBaru(TestCase):
             mock.patch.object(mi, "ambil_mapping_metadata", return_value={}),
             mock.patch.object(mi, "simpan_ke_file_laporan"),
             mock.patch.object(mi, "kirim_pesan_wa"),
+            mock.patch.object(mi, "tulis_rekap_olt"),
             mock.patch.object(mi, "simpan_log"),
         ):
             asyncio.run(mi.proses_pesan_baru(event))
@@ -489,14 +490,12 @@ class TestRencanaTulisRekap(TestCase):
             ["DUMAI | GPON00-D1-BGU-3BGB | 06:20 | 0"], [],
             self.dt(2026, 6, 20, 7, 38, 24),
         )
-        self.assertEqual(appends, [])
-        self.assertEqual(len(updates), 1)
-        nomor_baris, baris = updates[0]
-        self.assertEqual(nomor_baris, 2)
-        self.assertEqual(baris[0], "7")                 # NO dipertahankan
-        self.assertEqual(baris[3], "06:20")             # DURASI refresh
-        self.assertEqual(baris[12], "DOWN")
-        self.assertEqual(baris[13], "20/06/2026 07:38:24")
+        self.assertEqual(updates, [])
+        self.assertEqual(len(appends), 1)
+        self.assertEqual(appends[0][0], "2")            # NO = len(semua_nilai)
+        self.assertEqual(appends[0][3], "06:20")        # DURASI refresh
+        self.assertEqual(appends[0][12], "DOWN")
+        self.assertEqual(appends[0][13], "20/06/2026 07:38:24")
 
     def test_re_alert_metadata_kosong_mempertahankan_metadata_baris_aktif(self):
         mi.data_pln_down["PLN00-D1-BGU-3BGB"] = (
@@ -515,15 +514,17 @@ class TestRencanaTulisRekap(TestCase):
             self.dt(2026, 6, 20, 7, 30, 0),
         )
 
-        self.assertEqual(appends, [])
-        self.assertEqual(len(updates), 1)
-        nomor_baris, baris = updates[0]
-        self.assertEqual(nomor_baris, 2)
-        self.assertEqual(baris[0], baris_lama[0])
-        for indeks in (1, 2, 4, 5, 6, 7, 8, 9, 10):
-            with self.subTest(indeks=indeks):
-                self.assertEqual(baris[indeks], baris_lama[indeks])
+        # Append-only: re-alert appends a new row via bangun_baris_rekap
+        # with default metadata (mapping_metadata is empty {}).
+        self.assertEqual(updates, [])
+        self.assertEqual(len(appends), 1)
+        baris = appends[0]
+        self.assertEqual(baris[0], "2")                  # NO = len(semua_nilai)
+        self.assertEqual(baris[1], "PADANG")             # district from new info
+        self.assertEqual(baris[2], "GPON00-D1-BGU-3BGB")
         self.assertEqual(baris[3], "00:30")
+        self.assertEqual(baris[4], "Very Low")           # default severity
+        self.assertEqual(baris[5], "NodeB-Baru")         # node_b from info
         self.assertEqual(baris[11], "Baterai Habis dan OLT DOWN")
         self.assertEqual(baris[12], "DOWN")
         self.assertEqual(baris[13], "20/06/2026 07:30:00")
@@ -539,10 +540,11 @@ class TestRencanaTulisRekap(TestCase):
               "started_at": self.dt(2026, 6, 20, 1, 18, 24)}],
             self.dt(2026, 6, 20, 7, 8, 24),
         )
-        self.assertEqual(appends, [])
-        nomor_baris, baris = updates[0]
-        self.assertEqual(nomor_baris, 2)
-        self.assertEqual(baris[0], "1")                 # NO dipertahankan
+        # Append-only: UP event copies old row data and appends.
+        self.assertEqual(updates, [])
+        self.assertEqual(len(appends), 1)
+        baris = appends[0]
+        self.assertEqual(baris[0], "2")                 # NO = len(semua_nilai)
         self.assertEqual(baris[3], "05:50")             # total outage beku
         self.assertEqual(baris[11], "Kabel CUT")        # HIPOTESA dipertahankan
         self.assertEqual(baris[12], "UP")
@@ -553,12 +555,15 @@ class TestRencanaTulisRekap(TestCase):
                       "0", "0", "0", "0", "NON", "NOK", "Kabel CUT",
                       "DOWN", "20/06/2026 06:50:00"]
         semua_nilai = [mi.HEADER_REKAP, baris_lama]
-        updates, _ = mi.rencana_tulis_rekap(
+        updates, appends = mi.rencana_tulis_rekap(
             semua_nilai, self.metadata, [],
             [{"hostname": "GPON00-D1-BGU-3BGB", "started_at": None}],
             self.dt(2026, 6, 20, 7, 8, 24),
         )
-        _, baris = updates[0]
+        # Append-only: UP copies old row, preserves old duration when started_at=None
+        self.assertEqual(updates, [])
+        self.assertEqual(len(appends), 1)
+        baris = appends[0]
         self.assertEqual(baris[3], "06:20")             # durasi lama dipertahankan
         self.assertEqual(baris[12], "UP")
 
@@ -626,7 +631,7 @@ class TestTulisRekapOlt(TestCase):
         self.assertEqual(baris_baru[0][2], "GPON00-D1-BGU-3BGB")
         self.assertEqual(baris_baru[0][12], "DOWN")
 
-    def test_update_in_place_pakai_batch_update(self):
+    def test_re_alert_appends_new_row(self):
         from datetime import datetime
         baris_lama = ["1", "DUMAI", "GPON00-D1-BGU-3BGB", "05:50", "Very Low",
                       "0", "0", "0", "0", "NON", "NOK", "Kabel CUT",
@@ -644,11 +649,12 @@ class TestTulisRekapOlt(TestCase):
                 {}, ["DUMAI | GPON00-D1-BGU-3BGB | 06:20 | 0"], [],
                 datetime(2026, 6, 20, 7, 38, 24),
             )
-        ws.append_rows.assert_not_called()
-        ws.batch_update.assert_called_once()
-        data = ws.batch_update.call_args.args[0]
-        self.assertEqual(data[0]["range"], "A2:N2")
-        self.assertEqual(data[0]["values"][0][3], "06:20")
+        # Append-only: re-alert now appends, no batch_update
+        ws.batch_update.assert_not_called()
+        ws.append_rows.assert_called_once()
+        baris_baru = ws.append_rows.call_args.args[0]
+        self.assertEqual(baris_baru[0][3], "06:20")
+        self.assertEqual(baris_baru[0][12], "DOWN")
 
     def test_noop_saat_tidak_ada_item(self):
         from datetime import datetime

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-import auto_approve
-from auto_approve import (
+import backup.auto_approve as auto_approve
+from backup.auto_approve import (
     BrowserConnectError,
     CdpEndpoint,
     build_chrome_command,

@@ -4,13 +4,17 @@ import kirim_orm as ko
 
 
 def make_sheet_values():
+    # Columns: A=district, B=list, C=jenis, D=uic, E=status,
+    #          F=target, G=done, H=ach, I=progress
     return [
-        ["DISTRICT", "LIST", "ORM / NON", "TARGET", "DONE", "ACH %", "PROGRESS"],
-        ["PADANG", "ONT-Nisasi 14 Site", "ORM", "14", "3", "21,43%", "Sudah nodin"],
+        ["DISTRICT", "LIST", "ORM / NON", "UIC", "STATUS", "TARGET", "DONE", "ACH %", "PROGRESS"],
+        ["PADANG", "ONT-Nisasi 14 Site", "ORM", "14", "3", "14", "3", "21,43%", "Sudah nodin"],
         [
             "PADANG",
             "Link Radio IP LH from Siberut Utara to Bukit Silasung",
             "ORM",
+            "1",
+            "",
             "1",
             "",
             "0,00%",
@@ -21,14 +25,16 @@ def make_sheet_values():
             "QE ASK025 -> nitip di project bges",
             "NON-ORM",
             "1",
+            "0.5",
+            "1",
             "0,5",
             "50,00%",
             "Titip project BGES",
         ],
-        ["PEKAN BARU", "QE SSI544", "Non ORM", "5", "1", "20,00%", ""],
-        ["OTHER", "Tidak dipakai", "ORM", "1", "", "0,00%", ""],
-        ["PADANG", "", "NON-ORM", "1", "", "0,00%", ""],
-        ["PADANG", "Jenis tidak valid", "TODO", "1", "", "0,00%", ""],
+        ["PEKAN BARU", "QE SSI544", "Non ORM", "5", "1", "5", "1", "20,00%", ""],
+        ["OTHER", "Tidak dipakai", "ORM", "1", "", "1", "", "0,00%", ""],
+        ["PADANG", "", "NON-ORM", "1", "", "1", "", "0,00%", ""],
+        ["PADANG", "Jenis tidak valid", "TODO", "1", "", "1", "", "0,00%", ""],
     ]
 
 
@@ -50,9 +56,11 @@ class KirimOrmTests(TestCase):
         data = ko.ekstrak_data_per_distrik(make_sheet_values())
 
         self.assertEqual(data["PADANG"]["ORM"], [
-            {"list": "ONT-Nisasi 14 Site", "ach": "21,43%", "progress": "Sudah nodin"},
+            {"list": "ONT-Nisasi 14 Site", "uic": "14", "status": "3", "ach": "21,43%", "progress": "Sudah nodin"},
             {
                 "list": "Link Radio IP LH from Siberut Utara to Bukit Silasung",
+                "uic": "1",
+                "status": "",
                 "ach": "0,00%",
                 "progress": "",
             },
@@ -60,12 +68,14 @@ class KirimOrmTests(TestCase):
         self.assertEqual(data["PADANG"]["NON-ORM"], [
             {
                 "list": "QE ASK025 -> nitip di project bges",
+                "uic": "1",
+                "status": "0.5",
                 "ach": "50,00%",
                 "progress": "Titip project BGES",
             }
         ])
         self.assertEqual(data["PEKANBARU"]["NON-ORM"], [
-            {"list": "QE SSI544", "ach": "20,00%", "progress": ""}
+            {"list": "QE SSI544", "uic": "5", "status": "1", "ach": "20,00%", "progress": ""}
         ])
 
     def test_buat_pesan_distrik_uses_expected_bubble_format(self):
@@ -77,11 +87,12 @@ class KirimOrmTests(TestCase):
             "*List ORM*",
             "Padang",
             "============",
+            "LIST | UIC | ACH % | PROGRESS",
             "ORM:",
-            "1. ONT-Nisasi 14 Site | 21,43% | Sudah nodin",
-            "2. Link Radio IP LH from Siberut Utara to Bukit Silasung | 0,00% | -",
+            "1. ONT-Nisasi 14 Site | 14 | 21,43% | Sudah nodin",
+            "2. Link Radio IP LH from Siberut Utara to Bukit Silasung | 1 | 0,00% | -",
             "Non-ORM:",
-            "1. QE ASK025 -> nitip di project bges | 50,00% | Titip project BGES",
+            "1. QE ASK025 -> nitip di project bges | 1 | 50,00% | Titip project BGES",
             "cc @6281289149112",
         ]))
 
@@ -109,8 +120,16 @@ class KirimOrmTests(TestCase):
 
         self.assertEqual(len(sent), 2)
         self.assertEqual(sent[0][0], ko.GROUP_ID_TUJUAN)
-        self.assertTrue(sent[0][1].startswith("*List ORM*\nPekanbaru\n============\nORM:"))
-        self.assertTrue(sent[1][1].startswith("*List ORM*\nPadang\n============\nORM:"))
+        self.assertTrue(
+            sent[0][1].startswith(
+                "*List ORM*\nPekanbaru\n============\nLIST | UIC | ACH % | PROGRESS\n"
+            )
+        )
+        self.assertTrue(
+            sent[1][1].startswith(
+                "*List ORM*\nPadang\n============\nLIST | UIC | ACH % | PROGRESS\n"
+            )
+        )
         self.assertEqual(sent[0][2], ["6281372264429@c.us"])
         self.assertEqual(sent[1][2], ["6281289149112@c.us"])
         self.assertTrue(any("Ditemukan 4 list ORM/NON-ORM" in pesan for pesan in logs))
