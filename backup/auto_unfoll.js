@@ -7,7 +7,7 @@
     confirmDelayMs: 300,
     scrollDelayMs: 850,
     scrollJitterMs: 500,
-    maxActions: 75,
+    maxActions: 1000,
     pauseEveryActions: 25,
     pauseMs: 15000,
     networkWaitMs: 3000,
